@@ -1,29 +1,29 @@
 variable "project" {
-  description = "Short project name used in resource naming and tagging."
+  description = "project name for naming/tagging"
   type        = string
   default     = "opella"
 }
 
 variable "environment" {
-  description = "Environment name."
+  description = "environment name"
   type        = string
   default     = "prod"
 }
 
 variable "location" {
-  description = "Azure region, full name."
+  description = "Azure region"
   type        = string
   default     = "eastus"
 }
 
 variable "location_short" {
-  description = "Short region code used in resource names."
+  description = "short region code for names"
   type        = string
   default     = "eus"
 }
 
 variable "address_space" {
-  description = "VNET address space. Distinct range from dev so the two can be peered later without overlap."
+  description = "VNET address space, separate range from dev for future peering"
   type        = list(string)
   default     = ["10.20.0.0/16"]
 }
@@ -39,12 +39,12 @@ variable "data_subnet_prefix" {
 }
 
 variable "allowed_ssh_cidr" {
-  description = "CIDR allowed to SSH into the prod VM. In practice this should be a bastion/VPN range, not a laptop IP."
+  description = "CIDR allowed to SSH into the VM - use a bastion/VPN range"
   type        = string
 }
 
 variable "vm_size" {
-  description = "VM SKU. Larger than dev's burstable size since prod needs consistent CPU."
+  description = "VM SKU, larger than dev since prod needs steady CPU"
   type        = string
   default     = "Standard_D2s_v5"
 }
@@ -55,7 +55,7 @@ variable "admin_username" {
 }
 
 variable "ssh_public_key" {
-  description = "SSH public key content. Required in prod — unlike dev, this has no auto-generate fallback, since a Terraform-generated private key sitting in state is not acceptable for a production box."
+  description = "SSH public key, required - no auto-generated fallback in prod"
   type        = string
 }
 
