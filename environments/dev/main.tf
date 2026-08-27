@@ -47,12 +47,10 @@ module "vnet" {
       name              = "snet-data-${var.environment}"
       address_prefixes  = var.data_subnet_prefix
       service_endpoints = ["Microsoft.Storage"]
-      # no SSH/RDP rules here - only reachable via the storage service endpoint
     }
   ]
 }
 
-# Linux VM in the app subnet
 
 resource "tls_private_key" "generated" {
   count     = var.ssh_public_key == "" ? 1 : 0
@@ -102,7 +100,6 @@ resource "azurerm_linux_virtual_machine" "dev" {
   disable_password_authentication = true
 }
 
-# Storage account + blob container for app data
 
 resource "random_string" "storage_suffix" {
   length  = 4
@@ -117,7 +114,7 @@ resource "azurerm_storage_account" "dev" {
   tags                 = local.common_tags
 
   account_tier             = "Standard"
-  account_replication_type = "LRS" # cheapest, fine for dev; prod uses GRS (see environments/prod)
+  account_replication_type = "LRS" 
   min_tls_version          = "TLS1_2"
 
   network_rules {
