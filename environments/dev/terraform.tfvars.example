@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars (gitignored) and fill in real values,
+# or pass equivalent -var flags / TF_VAR_ env vars in CI.
+
+project     = "opella"
+environment = "dev"
+location    = "eastus"
+location_short = "eus"
+
+allowed_ssh_cidr = "203.0.113.10/32" # <-- replace with your actual IP/32
+
+owner       = "platform-team"
+cost_center = "eng-devops"
+
+# Optional: supply your own SSH public key instead of letting Terraform
+# generate one for you.
+# ssh_public_key = "ssh-rsa AAAA..."

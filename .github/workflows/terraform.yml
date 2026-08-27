@@ -1,0 +1,198 @@
+name: Terraform
+
+on:
+  pull_request:
+    paths:
+      - "modules/**"
+      - "environments/**"
+      - ".github/workflows/terraform.yml"
+  push:
+    branches: [main]
+    paths:
+      - "modules/**"
+      - "environments/**"
+
+permissions:
+  id-token: write   # required for OIDC login to Azure — no client secret stored anywhere
+  contents: read
+  pull-requests: write # to post the plan as a PR comment
+
+env:
+  TF_VERSION: "1.9.5"
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Static checks that don't need Azure credentials: run on every PR,
+  # fast-fail before we spend time on a real plan.
+  # ---------------------------------------------------------------------
+  static-checks:
+    name: Format, Validate, Lint, Docs, Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform fmt (check only)
+        run: terraform fmt -check -recursive
+
+      - name: terraform validate (module)
+        working-directory: modules/vnet
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+      - name: terraform test (module, plan-only, mocked provider)
+        working-directory: modules/vnet
+        run: terraform test
+
+      - name: TFLint
+        uses: terraform-linters/setup-tflint@v4
+      - run: tflint --init && tflint --recursive
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Security scan (Checkov)
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: terraform
+          quiet: true
+          soft_fail: false # a failed security check blocks the PR
+
+      - name: terraform-docs drift check
+        uses: terraform-docs/gh-actions@v1
+        with:
+          working-dir: modules/vnet
+          output-file: README.md
+          output-method: inject
+          git-push: false
+          fail-on-diff: true # PR fails if committed docs are out of date
+
+  # ---------------------------------------------------------------------
+  # Plan for each environment. Matrix so adding a third environment later
+  # is a one-line change, not a new job.
+  # ---------------------------------------------------------------------
+  plan:
+    name: Plan (${{ matrix.environment }})
+    needs: static-checks
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [dev, prod]
+    defaults:
+      run:
+        working-directory: environments/${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      # OIDC federated login: no long-lived client secret in GitHub Secrets.
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: terraform init
+        run: |
+          terraform init  # local state for now; add a backend "azurerm" block for real CI use
+
+      - name: terraform plan
+        id: plan
+        run: |
+          terraform plan -input=false -no-color \
+            -var="allowed_ssh_cidr=${{ secrets.ALLOWED_SSH_CIDR }}" \
+            -out=tfplan | tee plan_output.txt
+        continue-on-error: true
+
+      - name: Comment plan on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('environments/${{ matrix.environment }}/plan_output.txt', 'utf8').slice(-60000);
+            const body = `#### Terraform Plan — \`${{ matrix.environment }}\`\n<details><summary>Show plan</summary>\n\n\`\`\`\n${plan}\n\`\`\`\n</details>`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+
+      - name: Fail job if plan failed
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ matrix.environment }}
+          path: environments/${{ matrix.environment }}/tfplan
+          retention-days: 5
+
+  # ---------------------------------------------------------------------
+  # Apply only on merge to main, one environment at a time, each gated by
+  # a GitHub Environment with its own required reviewers. Dev can auto-
+  # approve; prod requires a human click in the GitHub UI.
+  # ---------------------------------------------------------------------
+  apply-dev:
+    name: Apply (dev)
+    needs: plan
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: dev
+    defaults:
+      run:
+        working-directory: environments/dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - run: |
+          terraform init  # local state for now; add a backend "azurerm" block for real CI use
+      - run: |
+          terraform apply -input=false -auto-approve \
+            -var="allowed_ssh_cidr=${{ secrets.ALLOWED_SSH_CIDR }}"
+
+  apply-prod:
+    name: Apply (prod)
+    needs: apply-dev
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    # The "prod" GitHub Environment has required reviewers configured in
+    # repo settings, so this job pauses for manual approval even though
+    # the workflow itself has no explicit approval step — that's what
+    # buys us the release-lifecycle gate described in the README.
+    environment: prod
+    defaults:
+      run:
+        working-directory: environments/prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - run: |
+          terraform init  # local state for now; add a backend "azurerm" block for real CI use
+      - run: |
+          terraform apply -input=false -auto-approve \
+            -var="allowed_ssh_cidr=${{ secrets.ALLOWED_SSH_CIDR_PROD }}" \
+            -var="ssh_public_key=${{ secrets.PROD_SSH_PUBLIC_KEY }}"
