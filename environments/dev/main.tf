@@ -70,7 +70,6 @@ resource "azurerm_network_interface" "vm" {
     name                          = "internal"
     subnet_id                     = module.vnet.subnet_ids["snet-app-${var.environment}"]
     private_ip_address_allocation = "Dynamic"
-    # no public IP - reachable only from inside the VNET or via Bastion/VPN
   }
 }
 
@@ -90,7 +89,7 @@ resource "azurerm_linux_virtual_machine" "dev" {
 
   os_disk {
     caching              = "ReadWrite"
-    storage_account_type = "Standard_LRS" # cheapest option, fine for dev; prod uses Premium_LRS
+    storage_account_type = "Standard_LRS" 
   }
 
   source_image_reference {
@@ -112,7 +111,6 @@ resource "random_string" "storage_suffix" {
 }
 
 resource "azurerm_storage_account" "dev" {
-  # Storage account names: 3-24 chars, lowercase letters/numbers only, globally unique.
   name                = lower(substr("st${var.project}${var.environment}${var.location_short}${random_string.storage_suffix.result}", 0, 24))
   resource_group_name = azurerm_resource_group.rg.name
   location             = azurerm_resource_group.rg.location
@@ -122,7 +120,6 @@ resource "azurerm_storage_account" "dev" {
   account_replication_type = "LRS" # cheapest, fine for dev; prod uses GRS (see environments/prod)
   min_tls_version          = "TLS1_2"
 
-  # locked to the data subnet, no public network access
   network_rules {
     default_action             = "Deny"
     virtual_network_subnet_ids = [module.vnet.subnet_ids["snet-data-${var.environment}"]]
