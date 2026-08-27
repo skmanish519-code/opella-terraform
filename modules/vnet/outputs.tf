@@ -1,29 +1,29 @@
 output "vnet_id" {
-  description = "Resource ID of the virtual network. Needed by peerings, private endpoints, or anything referencing this VNET from another module/state."
+  description = "VNET resource ID"
   value       = azurerm_virtual_network.vnet.id
 }
 
 output "vnet_name" {
-  description = "Name of the virtual network."
+  description = "VNET name"
   value       = azurerm_virtual_network.vnet.name
 }
 
 output "address_space" {
-  description = "Address space of the VNET, useful for downstream NSG/firewall rules that need to allow traffic from this network."
+  description = "VNET address space"
   value       = azurerm_virtual_network.vnet.address_space
 }
 
 output "subnet_ids" {
-  description = "Map of subnet name => subnet resource ID. Consumers (VMs, App Services, private endpoints) look up the subnet they need by name instead of relying on list ordering."
+  description = "subnet name -> subnet ID"
   value       = { for name, s in azurerm_subnet.subnet : name => s.id }
 }
 
 output "subnet_address_prefixes" {
-  description = "Map of subnet name => address prefixes, useful for documentation and for NSG rules elsewhere that need to allow a specific subnet's range."
+  description = "subnet name -> address prefixes"
   value       = { for name, s in azurerm_subnet.subnet : name => s.address_prefixes }
 }
 
 output "nsg_ids" {
-  description = "Map of subnet name => NSG resource ID, for subnets that had create_nsg = true. Lets callers attach diagnostic settings or additional rules."
+  description = "subnet name -> NSG ID, only for subnets that have one"
   value       = { for name, nsg in azurerm_network_security_group.nsg : name => nsg.id }
 }
