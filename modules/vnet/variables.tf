@@ -1,31 +1,31 @@
 variable "resource_group_name" {
-  description = "Name of the resource group where the VNET will be created."
+  description = "resource group for the VNET"
   type        = string
 }
 
 variable "location" {
-  description = "Azure region for the VNET (e.g. eastus, westeurope)."
+  description = "Azure region, e.g. eastus"
   type        = string
 }
 
 variable "vnet_name" {
-  description = "Name of the virtual network."
+  description = "VNET name"
   type        = string
 }
 
 variable "address_space" {
-  description = "Address space (CIDR blocks) for the VNET."
+  description = "VNET address space (CIDR blocks)"
   type        = list(string)
 }
 
 variable "dns_servers" {
-  description = "Optional custom DNS servers for the VNET. Leave empty to use Azure-provided DNS."
+  description = "custom DNS servers, empty for Azure default"
   type        = list(string)
   default     = []
 }
 
 variable "subnets" {
-  description = "Subnets to create in the VNET. Each can optionally define its own NSG rules and service endpoints."
+  description = "subnets to create, each optionally with its own NSG rules and service endpoints"
   type = list(object({
     name               = string
     address_prefixes   = list(string)
@@ -36,7 +36,7 @@ variable "subnets" {
       priority                   = number
       direction                  = string # Inbound | Outbound
       access                     = string # Allow | Deny
-      protocol                   = string # Tcp | Udp | * 
+      protocol                   = string # Tcp | Udp | *
       source_port_range          = optional(string, "*")
       destination_port_range     = optional(string, "*")
       source_address_prefix      = optional(string, "*")
@@ -51,19 +51,19 @@ variable "subnets" {
 }
 
 variable "enable_ddos_protection" {
-  description = "Attach a DDoS protection plan to the VNET. Off by default - it's a paid, per-hour resource."
+  description = "attach a DDoS protection plan (paid, off by default)"
   type        = bool
   default     = false
 }
 
 variable "ddos_protection_plan_id" {
-  description = "Resource ID of an existing DDoS protection plan. Required only when enable_ddos_protection is true."
+  description = "DDoS plan ID, required if enable_ddos_protection is true"
   type        = string
   default     = null
 }
 
 variable "tags" {
-  description = "Common tags applied to the VNET and every resource this module creates (subnets, NSGs)."
+  description = "tags applied to all resources this module creates"
   type        = map(string)
   default     = {}
 }
