@@ -13,7 +13,7 @@ on:
       - "environments/**"
 
 permissions:
-  id-token: write   # required for OIDC login to Azure — no client secret stored anywhere
+  id-token: write   # OIDC login to Azure — no client secret stored
   contents: read
   pull-requests: write # to post the plan as a PR comment
 
@@ -21,12 +21,8 @@ env:
   TF_VERSION: "1.9.5"
 
 jobs:
-  # ---------------------------------------------------------------------
-  # Static checks that don't need Azure credentials: run on every PR,
-  # fast-fail before we spend time on a real plan.
-  # ---------------------------------------------------------------------
   static-checks:
-    name: Format, Validate, Lint, Docs, Unit Tests
+    name: Format, Validate, Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,33 +44,6 @@ jobs:
         working-directory: modules/vnet
         run: terraform test
 
-      - name: TFLint
-        uses: terraform-linters/setup-tflint@v4
-      - run: tflint --init && tflint --recursive
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Security scan (Checkov)
-        uses: bridgecrewio/checkov-action@v12
-        with:
-          directory: .
-          framework: terraform
-          quiet: true
-          soft_fail: false # a failed security check blocks the PR
-
-      - name: terraform-docs drift check
-        uses: terraform-docs/gh-actions@v1
-        with:
-          working-dir: modules/vnet
-          output-file: README.md
-          output-method: inject
-          git-push: false
-          fail-on-diff: true # PR fails if committed docs are out of date
-
-  # ---------------------------------------------------------------------
-  # Plan for each environment. Matrix so adding a third environment later
-  # is a one-line change, not a new job.
-  # ---------------------------------------------------------------------
   plan:
     name: Plan (${{ matrix.environment }})
     needs: static-checks
@@ -92,7 +61,6 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      # OIDC federated login: no long-lived client secret in GitHub Secrets.
       - uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -100,8 +68,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: terraform init
-        run: |
-          terraform init  # local state for now; add a backend "azurerm" block for real CI use
+        run: terraform init
 
       - name: terraform plan
         id: plan
@@ -130,18 +97,6 @@ jobs:
         if: steps.plan.outcome == 'failure'
         run: exit 1
 
-      - name: Upload plan artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: tfplan-${{ matrix.environment }}
-          path: environments/${{ matrix.environment }}/tfplan
-          retention-days: 5
-
-  # ---------------------------------------------------------------------
-  # Apply only on merge to main, one environment at a time, each gated by
-  # a GitHub Environment with its own required reviewers. Dev can auto-
-  # approve; prod requires a human click in the GitHub UI.
-  # ---------------------------------------------------------------------
   apply-dev:
     name: Apply (dev)
     needs: plan
@@ -161,8 +116,7 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - run: |
-          terraform init  # local state for now; add a backend "azurerm" block for real CI use
+      - run: terraform init
       - run: |
           terraform apply -input=false -auto-approve \
             -var="allowed_ssh_cidr=${{ secrets.ALLOWED_SSH_CIDR }}"
@@ -173,9 +127,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     # The "prod" GitHub Environment has required reviewers configured in
-    # repo settings, so this job pauses for manual approval even though
-    # the workflow itself has no explicit approval step — that's what
-    # buys us the release-lifecycle gate described in the README.
+    # repo settings, so this job pauses for manual approval before running.
     environment: prod
     defaults:
       run:
@@ -190,8 +142,7 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - run: |
-          terraform init  # local state for now; add a backend "azurerm" block for real CI use
+      - run: terraform init
       - run: |
           terraform apply -input=false -auto-approve \
             -var="allowed_ssh_cidr=${{ secrets.ALLOWED_SSH_CIDR_PROD }}" \

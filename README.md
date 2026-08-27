@@ -8,14 +8,12 @@ and a GitHub Actions pipeline for plan/apply.
 .
 ├── modules/vnet/            # Reusable VNET module
 │   ├── main.tf / variables.tf / outputs.tf / versions.tf
-│   ├── examples/basic/      # Example usage
-│   ├── tests/*.tftest.hcl   # terraform test suite (plan-only, mocked provider)
+│   ├── vnet.tftest.hcl      # terraform test suite (plan-only, mocked provider)
 │   └── README.md
 ├── environments/
 │   ├── dev/
 │   └── prod/
 ├── .github/workflows/terraform.yml
-├── .tflint.hcl / .checkov.yaml / .pre-commit-config.yaml
 └── CONVENTIONS.md           # Naming/tagging rules, RG vs subscription decision
 ```
 
@@ -78,8 +76,7 @@ subscription per environment — reasoning in `CONVENTIONS.md`.
 
 `.github/workflows/terraform.yml`:
 
-1. PR opened → fmt, validate, module tests, tflint, Checkov, terraform-docs
-   drift check all run.
+1. PR opened → fmt, validate, and the module's `terraform test` suite run.
 2. `plan` runs for both `dev` and `prod`, posted as a PR comment.
 3. Merge to `main` → auto-apply to dev.
 4. Apply to prod waits for manual approval (GitHub Environment protection
@@ -88,11 +85,16 @@ subscription per environment — reasoning in `CONVENTIONS.md`.
 
 ## Tooling
 
-- `terraform fmt -check` / `terraform validate`
-- TFLint with the `azurerm` ruleset
-- Checkov for security/compliance scanning
-- terraform-docs for the module README, checked for drift in CI
-- `.pre-commit-config.yaml` wires all of it into local pre-commit hooks
+`terraform fmt -check` and `terraform validate` run in CI on every PR, plus
+the module's own `terraform test` suite (see `modules/vnet/tests`).
+
+For a longer-lived version of this repo I'd add: TFLint (catches unused
+variables, naming issues, deprecated syntax), Checkov or tfsec (flags
+security misconfigurations — public storage access, missing encryption,
+open NSG rules), and terraform-docs (auto-generates the variable/output
+tables in each module's README so docs can't drift from the code). All
+three plug into the same CI job as an extra step, and into a local
+pre-commit hook so issues get caught before a PR is even opened.
 
 ## Naming & tagging
 

@@ -3,9 +3,9 @@ environment    = "prod"
 location       = "eastus"
 location_short = "eus"
 
-allowed_ssh_cidr = "10.0.0.0/16" # e.g. your VPN/bastion range, never a public IP
+allowed_ssh_cidr = "10.0.0.0/16" # bastion/VPN range, not a laptop IP
 
 owner       = "platform-team"
 cost_center = "eng-devops"
 
-ssh_public_key = "ssh-rsa AAAA..." # required — no auto-generated fallback in prod
+ssh_public_key = "ssh-rsa AAAA..." # required, no auto-gen fallback here

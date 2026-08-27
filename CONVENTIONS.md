@@ -56,9 +56,10 @@ block per environment, plus any resource-specific tags:
   This repo doesn't provision that policy assignment (it's a subscription-level
   governance concern, usually owned by a platform/landing-zone team rather
   than an individual workload), but it's the recommended pairing with this
-  code — see `bootstrap/` for where that would live.
-- **In CI**: the `checkov`/`tfsec` step in the pipeline includes rules that
-  fail a PR if `tags` is missing on a supported resource type.
+  code.
+- **As a proposed CI check**: a Checkov/tfsec step could be added to the
+  pipeline to fail a PR if `tags` is missing on a supported resource type —
+  see the Tooling section in the root README.
 
 ## Resource Groups vs. Subscriptions
 
